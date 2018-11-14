@@ -5,6 +5,7 @@ import os
 import uuid
 import numpy as np
 from random import shuffle
+from collections import OrderedDict
 from music21 import converter, instrument, note, chord, stream
 from keras.models import Sequential
 from keras.layers import Dense
@@ -44,7 +45,9 @@ def readMids(dataset):
             if isinstance(element, note.Note):
                 notes.append(str(element.pitch))
             elif isinstance(element, chord.Chord):
-                notes.append('.'.join(str(n) for n in element.normalOrder))
+                notes.append(
+                    '.'.join(str(n) for n in element.normalOrder)
+                )
     shuffle(notes)
     createDir("notes")
     fname = 'notes/{}'.format(dataset)
@@ -66,9 +69,11 @@ def getXY(notes, vocab, seq_len):
     Then, uses the dictionary and creates normalized input and output for the network.
     '''
 
-    pitchstrings = sorted(set(item for item in notes))
+    pitchstrings = OrderedDict.fromkeys(item for item in notes)
 
-    note2int = dict((note, number) for number, note in enumerate(pitchstrings))
+    note2int = dict(
+        (note, number) for number, note in enumerate(pitchstrings)
+    )
 
     input = []
     output = []
@@ -124,7 +129,6 @@ def train(args):
         args.units,
         args.drop_rate
     )  
-
     createDir("models")
     name = "{}-{}-{}-{}-{}".format(
         args.dataset,
@@ -183,7 +187,7 @@ def compose(model, input, pitchstrings, vocab, composition_len):
     pattern = input[start]
     output = []
 
-    for note_index in range(composition_len):
+    for _ in range(composition_len):
         prediction_input = np.reshape(pattern, (1, len(pattern), 1))
         prediction_input = prediction_input / float(vocab)
 
@@ -232,7 +236,7 @@ def generate(args):
     with open('notes/{}'.format(args.dataset), 'rb') as filepath:
         notes = pickle.load(filepath)
 
-    pitchstrings = sorted(set(item for item in notes))
+    pitchstrings = OrderedDict.fromkeys(item for item in notes)
     vocab = len(set(notes))
 
     input, normalized_input = getNormX(notes, pitchstrings, vocab, args.seq_len)
