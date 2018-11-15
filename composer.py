@@ -2,7 +2,6 @@ import glob
 import pickle
 import argparse
 import os
-import uuid
 import numpy as np
 from random import shuffle
 from collections import OrderedDict
@@ -48,33 +47,45 @@ def readMids(dataset):
                 notes.append(
                     '.'.join(str(n) for n in element.normalOrder)
                 )
-    shuffle(notes)
     createDir("notes")
     fname = 'notes/{}'.format(dataset)
     if os.path.exists(fname):
-        print("File already exists.")
-        fname += str(uuid.uuid4())
-    with open(fname, 'wb') as filepath:
-        pickle.dump(notes, filepath)
+        print("Encoded dataset already exists.")
+    else:
+        with open(fname, 'wb') as filepath:
+            pickle.dump(notes, filepath)
+            print("Encoded dataset saved in ",fname)
+    createDir("dicts")
+    fname = 'dicts/{}-note2int'.format(dataset)
+    pitchstrings = sorted(set(item for item in notes))
+    if os.path.exists(fname):
+        print("Note2Int dict already exists.")
+    else:
+        note2int = dict(
+            (note, number) for number, note in enumerate(pitchstrings)
+        )
+        with open(fname, 'wb') as filepath:
+            pickle.dump(note2int, filepath)
+            print("Int2Note dict saved in ",fname)
+    fname = 'dicts/{}-int2note'.format(dataset)
+    if os.path.exists(fname):
+        print("Int2Note dict already exists.")
+    else:
+        int2note = dict(
+            (number, note) for number, note in enumerate(pitchstrings)
+        )
+        with open(fname, 'wb') as filepath:
+            pickle.dump(int2note, filepath)
+            print("Int2Note dict saved in ",fname)
 
-    return fname
+    return notes
 
-def encode(args):
-    fname = readMids(args.dataset)
-    print("Dataset encoded and saved in ",fname)
 
-def getXY(notes, vocab, seq_len):
+def getXY(notes, note2int, vocab, seq_len):
     '''
     Creates a dictionary and uses it to map integers to notes.
     Then, uses the dictionary and creates normalized input and output for the network.
     '''
-
-    pitchstrings = OrderedDict.fromkeys(item for item in notes)
-
-    note2int = dict(
-        (note, number) for number, note in enumerate(pitchstrings)
-    )
-
     input = []
     output = []
     for i in range(0, len(notes) - seq_len, 1):
@@ -115,12 +126,15 @@ def buildModel(input, vocab, learning_rate, units, drop_rate, load=None):
     return model
 
 def train(args):
-    with open('notes/{}'.format(args.dataset), 'rb') as filepath:
-        notes = pickle.load(filepath)
+    notes = readMids(args.dataset)
+
+    with open('dicts/{}-note2int'.format(args.dataset),'rb') as filepath:
+        note2int = pickle.load(filepath)
+    
 
     vocab = len(set(notes))
 
-    input, output = getXY(notes, vocab, args.seq_len)
+    input, output = getXY(notes, note2int, vocab, args.seq_len)
 
     model = buildModel(
         input,
@@ -156,12 +170,11 @@ def train(args):
 
     return model
 
-def getNormX(notes, pitchstrings, vocab, seq_len):
+def getNormX(notes, note2int, vocab, seq_len):
     '''
     Creates a dictionary and uses it to map notes to integers.
     Then, uses the dictionary and creates input and normalized inputs.
     '''
-    note2int = dict((note, number) for number, note in enumerate(pitchstrings))
 
     input = []
     output = []
@@ -178,11 +191,12 @@ def getNormX(notes, pitchstrings, vocab, seq_len):
 
     return input, normalized_input
 
-def compose(model, input, pitchstrings, vocab, composition_len):
+def compose(model, input, vocab, composition_len):
 
     start = np.random.randint(0, len(input)-1)
 
-    int2note = dict((number, note) for number, note in enumerate(pitchstrings))
+    with open('dicts/{}-int2note'.format(args.dataset),'rb') as filepath:
+        int2note = pickle.load(filepath)
 
     pattern = input[start]
     output = []
@@ -236,10 +250,12 @@ def generate(args):
     with open('notes/{}'.format(args.dataset), 'rb') as filepath:
         notes = pickle.load(filepath)
 
-    pitchstrings = OrderedDict.fromkeys(item for item in notes)
+    with open('dicts/{}-note2int'.format(args.dataset),'rb') as filepath:
+        note2int = pickle.load(filepath)
+
     vocab = len(set(notes))
 
-    input, normalized_input = getNormX(notes, pitchstrings, vocab, args.seq_len)
+    input, normalized_input = getNormX(notes, note2int, vocab, args.seq_len)
     model = buildModel(
         normalized_input,
         vocab,
@@ -251,7 +267,6 @@ def generate(args):
     prediction = compose(
         model,
         input,
-        pitchstrings,
         vocab,
         args.composition_len
     )
@@ -261,10 +276,6 @@ arg_parser = argparse.ArgumentParser(
     description="Model for music composition, using RNN-LSTM.")
 subparsers = arg_parser.add_subparsers(title="subcommands")
 
-encode_parser = subparsers.add_parser("encode", help="Encodes a dataset o use it for training.")
-encode_parser.add_argument("--dataset", required=True,
-                          help="Name of the folder inside midi that contains the dataset.")
-encode_parser.set_defaults(main=encode)
 
 train_parser = subparsers.add_parser("train", help="Trains the model with midi files.")
 train_parser.add_argument("--dataset", required=True,
