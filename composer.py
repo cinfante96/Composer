@@ -58,6 +58,7 @@ def readMids(dataset):
     createDir("dicts")
     fname = 'dicts/{}-note2int'.format(dataset)
     pitchstrings = sorted(set(item for item in notes))
+    shuffle(pitchstrings)
     if os.path.exists(fname):
         print("Note2Int dict already exists.")
     else:
