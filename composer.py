@@ -103,20 +103,43 @@ def getXY(notes, note2int, vocab, seq_len):
     return input, output
 
 
-def buildModel(input, vocab, learning_rate, units, drop_rate, load=None):
+def buildModel(input, vocab, learning_rate, units, drop_rate, num_layers, load=None):
     model = Sequential()
-    model.add(LSTM(
+
+    if num_layers == 1:
+        model.add(LSTM(
+        units,
+        input_shape=(input.shape[1], input.shape[2]),
+        return_sequences=False
+        ))
+        model.add(Dropout(drop_rate))
+        model.add(Dense(vocab))
+        model.add(Activation('softmax'))
+    elif num_layers == 2:
+        model.add(LSTM(
         units,
         input_shape=(input.shape[1], input.shape[2]),
         return_sequences=True
-    ))
-    model.add(Dropout(drop_rate))
-    model.add(LSTM(units, return_sequences=True))
-    model.add(Dropout(drop_rate))
-    model.add(LSTM(units))
-    model.add(Dropout(drop_rate))
-    model.add(Dense(vocab))
-    model.add(Activation('softmax'))
+        ))
+        model.add(Dropout(drop_rate))
+        model.add(LSTM(units))
+        model.add(Dropout(drop_rate))
+        model.add(Dense(vocab))
+        model.add(Activation('softmax'))
+    else:
+        model.add(LSTM(
+        units,
+        input_shape=(input.shape[1], input.shape[2]),
+        return_sequences=True
+        ))
+        model.add(Dropout(drop_rate))
+        model.add(LSTM(units, return_sequences=True))
+        model.add(Dropout(drop_rate))
+        model.add(LSTM(units))
+        model.add(Dropout(drop_rate))
+        model.add(Dense(vocab))
+        model.add(Activation('softmax'))
+
     optimizer = optimizers.RMSprop(learning_rate)
     model.compile(
         loss='categorical_crossentropy',
@@ -142,7 +165,8 @@ def train(args):
         vocab,
         args.learning_rate,
         args.units,
-        args.drop_rate
+        args.drop_rate,
+        args.num_layers
     )  
     createDir("models")
     name = "{}-{}-{}-{}-{}".format(
@@ -263,6 +287,7 @@ def generate(args):
         args.learning_rate,
         args.units,
         args.drop_rate,
+        args.num_layers,
         args.load
     )
     prediction = compose(
@@ -293,6 +318,7 @@ train_parser.add_argument("--batch-size", type=int, default=64,
                           help="Size of training batches (64 by default).")
 train_parser.add_argument("--epochs", type=int, default=200,
                           help="Max number of epochs (200 by default).")
+train_parser.add_argument("--num_layers", type=int, default=1, help="Number of LSTM layers in the model (1 by default).")
 train_parser.set_defaults(main=train)
 
 
@@ -314,6 +340,7 @@ generate_parser.add_argument("--note-len", type=float, default=0.5,
                           help="Note length (0.5 by default).")
 generate_parser.add_argument("--load", type=str, default=None,
                           help="Name of the model to load.")
+generate_parser.add_argument("--num_layers", type=int, default=1, help="Number of LSTM layers in the model (1 by default).")
 generate_parser.set_defaults(main=generate)
 
 args = arg_parser.parse_args()
