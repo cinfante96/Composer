@@ -102,7 +102,6 @@ def getXY(notes, note2int, vocab, seq_len):
 
     return input, output
 
-
 def buildModel(input, vocab, learning_rate, units, drop_rate, num_layers, load=None):
     model = Sequential()
 
@@ -270,6 +269,9 @@ def createMidi(prediction_output, note_len, name):
 
     midi_stream.write('midi', fp='test_{}.mid'.format(name))
 
+    if args.display_sheet:
+        midi_stream.show('lily')
+
 def generate(args):
 
     with open('notes/{}'.format(args.dataset), 'rb') as filepath:
@@ -341,6 +343,7 @@ generate_parser.add_argument("--note-len", type=float, default=0.5,
 generate_parser.add_argument("--load", type=str, default=None,
                           help="Name of the model to load.")
 generate_parser.add_argument("--num_layers", type=int, default=1, help="Number of LSTM layers in the model (1 by default).")
+generate_parser.add_argument("-d","--display-sheet", action="store_true", help="Displays a music sheet image of the generated melody.")
 generate_parser.set_defaults(main=generate)
 
 args = arg_parser.parse_args()
