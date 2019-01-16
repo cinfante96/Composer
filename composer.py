@@ -300,6 +300,20 @@ def generate(args):
     )
     createMidi(prediction, args.note_len, args.dataset)
 
+def display(args):
+
+    path = os.path.abspath('./{}'.format(args.midi_path))
+    midi_stream = converter.parseFile(path)
+    notes_to_parse = None
+
+    try:
+        score = instrument.partitionByInstrument(midi_stream)
+        notes_to_parse = score.parts[0].recurse() 
+    except:
+        notes_to_parse = midi_stream.flat.notes
+
+    notes_to_parse.show('lily')
+
 arg_parser = argparse.ArgumentParser(
     description="Model for music composition, using RNN-LSTM.")
 subparsers = arg_parser.add_subparsers(title="subcommands")
@@ -323,8 +337,6 @@ train_parser.add_argument("--epochs", type=int, default=200,
 train_parser.add_argument("--num_layers", type=int, default=1, help="Number of LSTM layers in the model (1 by default).")
 train_parser.set_defaults(main=train)
 
-
-
 generate_parser = subparsers.add_parser("generate", help="Composes music with a trained model.")
 generate_parser.add_argument("--dataset", required=True,
                           help="Name of the folder inside midi that contains the dataset.")
@@ -345,6 +357,10 @@ generate_parser.add_argument("--load", type=str, default=None,
 generate_parser.add_argument("--num_layers", type=int, default=1, help="Number of LSTM layers in the model (1 by default).")
 generate_parser.add_argument("-d","--display-sheet", action="store_true", help="Displays a music sheet image of the generated melody.")
 generate_parser.set_defaults(main=generate)
+
+generate_parser = subparsers.add_parser("display", help="Display a music sheet image for a midi.")
+generate_parser.add_argument("--midi_path",required=True,help="Path to the midi.")
+generate_parser.set_defaults(main=display)
 
 args = arg_parser.parse_args()
 args.main(args)
