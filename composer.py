@@ -10,10 +10,13 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import Dropout
 from keras.layers import LSTM
+from keras.layers import SimpleRNN
 from keras.layers import Activation
 from keras.utils import np_utils
+from keras.utils import plot_model
 from keras.callbacks import ModelCheckpoint
 from keras import optimizers
+import matplotlib.pyplot as plt
 
 def createDir(directory):
     if not os.path.exists(directory):
@@ -102,7 +105,7 @@ def getXY(notes, note2int, vocab, seq_len):
 
     return input, output
 
-def buildModel(input, vocab, learning_rate, units, drop_rate, num_layers, load=None):
+def buildModelLSTM(input, vocab, learning_rate, units, drop_rate, num_layers, load=None):
     model = Sequential()
 
     if num_layers == 1:
@@ -148,25 +151,81 @@ def buildModel(input, vocab, learning_rate, units, drop_rate, num_layers, load=N
         model.load_weights('models/{}.hdf5'.format(load))
     return model
 
+def buildModelRNN(input, vocab, learning_rate, units, drop_rate, num_layers, load=None):
+    model = Sequential()
+
+    if num_layers == 1:
+        model.add(SimpleRNN(
+        units,
+        input_shape=(input.shape[1], input.shape[2]),
+        return_sequences=False
+        ))
+        model.add(Dropout(drop_rate))
+        model.add(Dense(vocab))
+        model.add(Activation('softmax'))
+    elif num_layers == 2:
+        model.add(SimpleRNN(
+        units,
+        input_shape=(input.shape[1], input.shape[2]),
+        return_sequences=True
+        ))
+        model.add(Dropout(drop_rate))
+        model.add(SimpleRNN(units))
+        model.add(Dropout(drop_rate))
+        model.add(Dense(vocab))
+        model.add(Activation('softmax'))
+    else:
+        model.add(SimpleRNN(
+        units,
+        input_shape=(input.shape[1], input.shape[2]),
+        return_sequences=True
+        ))
+        model.add(Dropout(drop_rate))
+        model.add(SimpleRNN(units, return_sequences=True))
+        model.add(Dropout(drop_rate))
+        model.add(SimpleRNN(units))
+        model.add(Dropout(drop_rate))
+        model.add(Dense(vocab))
+        model.add(Activation('softmax'))
+
+    optimizer = optimizers.RMSprop(learning_rate)
+    model.compile(
+        loss='categorical_crossentropy',
+        optimizer=optimizer
+    )
+    if load:
+        model.load_weights('models/{}.hdf5'.format(load))
+    return model
+
 def train(args):
     notes = readMids(args.dataset)
 
     with open('dicts/{}-note2int'.format(args.dataset),'rb') as filepath:
         note2int = pickle.load(filepath)
-    
 
     vocab = len(set(notes))
 
     input, output = getXY(notes, note2int, vocab, args.seq_len)
 
-    model = buildModel(
-        input,
-        vocab,
-        args.learning_rate,
-        args.units,
-        args.drop_rate,
-        args.num_layers
-    )  
+    if args.rnn:
+        model = buildModelRNN(
+            input,
+            vocab,
+            args.learning_rate,
+            args.units,
+            args.drop_rate,
+            args.num_layers
+        )  
+    else:
+        model = buildModelLSTM(
+            input,
+            vocab,
+            args.learning_rate,
+            args.units,
+            args.drop_rate,
+            args.num_layers
+        )  
+
     createDir("models")
     name = "{}-{}-{}-{}-{}".format(
         args.dataset,
@@ -175,7 +234,10 @@ def train(args):
         args.drop_rate,
         args.batch_size
     )
+
     filepath = "models/weights-"+name+"-{epoch:02d}-{loss:.2f}.hdf5"
+    #if args.plot_model_graph:
+        #plot_model(model, to_file="models/weights-"+name+"-{epoch:02d}-{loss:.2f}.png")
     checkpoint = ModelCheckpoint(
         filepath,
         monitor='loss',
@@ -184,13 +246,21 @@ def train(args):
     )
     callbacks_list = [checkpoint]
 
-    model.fit(
-        input,
-        output,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        callbacks=callbacks_list
-    )
+    history = model.fit(
+                input,
+                output,
+                epochs=args.epochs,
+                batch_size=args.batch_size,
+                callbacks=callbacks_list
+              )
+
+    if args.plot_history:
+        plt.plot(history.history['loss'])
+        plt.title('Model loss')
+        plt.ylabel('Accuracy')
+        plt.xlabel('Epoch')
+        plt.legend(['Train'], loc='upper left')
+        plt.show()
 
     return model
 
@@ -283,7 +353,7 @@ def generate(args):
     vocab = len(set(notes))
 
     input, normalized_input = getNormX(notes, note2int, vocab, args.seq_len)
-    model = buildModel(
+    model = buildModelLSTM(
         normalized_input,
         vocab,
         args.learning_rate,
@@ -318,7 +388,7 @@ arg_parser = argparse.ArgumentParser(
     description="Model for music composition, using RNN-LSTM.")
 subparsers = arg_parser.add_subparsers(title="subcommands")
 
-
+# Subparser for training.
 train_parser = subparsers.add_parser("train", help="Trains the model with midi files.")
 train_parser.add_argument("--dataset", required=True,
                           help="Name of the folder inside midi that contains the dataset.")
@@ -335,8 +405,12 @@ train_parser.add_argument("--batch-size", type=int, default=64,
 train_parser.add_argument("--epochs", type=int, default=200,
                           help="Max number of epochs (200 by default).")
 train_parser.add_argument("--num_layers", type=int, default=1, help="Number of LSTM layers in the model (1 by default).")
+train_parser.add_argument("-r","--rnn", action="store_true", help="Trains with a simple RNN, instead of a LSTM network.")
+train_parser.add_argument("-g","--plot_model_graph", action="store_true", help="This will plot a graph of the model and save it to a file.")
+train_parser.add_argument("-p","--plot_history", action="store_true", help="This will create a plot for the training history of the model.")
 train_parser.set_defaults(main=train)
 
+# Subparser for generating music.
 generate_parser = subparsers.add_parser("generate", help="Composes music with a trained model.")
 generate_parser.add_argument("--dataset", required=True,
                           help="Name of the folder inside midi that contains the dataset.")
@@ -358,6 +432,7 @@ generate_parser.add_argument("--num_layers", type=int, default=1, help="Number o
 generate_parser.add_argument("-d","--display-sheet", action="store_true", help="Displays a music sheet image of the generated melody.")
 generate_parser.set_defaults(main=generate)
 
+# Subparser for displaying music sheets.
 generate_parser = subparsers.add_parser("display", help="Display a music sheet image for a midi.")
 generate_parser.add_argument("--midi_path",required=True,help="Path to the midi.")
 generate_parser.set_defaults(main=display)
