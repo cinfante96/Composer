@@ -2,7 +2,9 @@ import glob
 import pickle
 import argparse
 import os
+import json
 import numpy as np
+from clr_callback import CyclicLR
 from random import shuffle
 from collections import OrderedDict
 from music21 import converter, instrument, note, chord, stream
@@ -17,6 +19,10 @@ from keras.utils import plot_model
 from keras.callbacks import ModelCheckpoint
 from keras import optimizers
 import matplotlib.pyplot as plt
+
+def running_mean(x, N):
+    cumsum = np.cumsum(np.insert(x, 0, 0)) 
+    return (cumsum[N:] - cumsum[:-N]) / float(N)
 
 def createDir(directory):
     if not os.path.exists(directory):
@@ -145,7 +151,8 @@ def buildModelLSTM(input, vocab, learning_rate, units, drop_rate, num_layers, lo
     optimizer = optimizers.RMSprop(learning_rate)
     model.compile(
         loss='categorical_crossentropy',
-        optimizer=optimizer
+        optimizer=optimizer,
+        metrics=['acc']
     )
     if load:
         model.load_weights('models/{}.hdf5'.format(load))
@@ -191,7 +198,8 @@ def buildModelRNN(input, vocab, learning_rate, units, drop_rate, num_layers, loa
     optimizer = optimizers.RMSprop(learning_rate)
     model.compile(
         loss='categorical_crossentropy',
-        optimizer=optimizer
+        optimizer=optimizer,
+        metrics=['acc']
     )
     if load:
         model.load_weights('models/{}.hdf5'.format(load))
@@ -244,20 +252,57 @@ def train(args):
         verbose=0,
         save_best_only=True,
     )
-    callbacks_list = [checkpoint]
+    if args.cyclic_learning_rate:
 
-    history = model.fit(
-                input,
-                output,
-                epochs=args.epochs,
-                batch_size=args.batch_size,
-                callbacks=callbacks_list
-              )
+        clr = CyclicLR(base_lr=0.001, max_lr=0.03, step_size=11100, mode='triangular')
+        callbacks_list = [checkpoint,clr]
+
+        history = model.fit(
+            input,
+            output,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            callbacks=callbacks_list
+          )
+
+        h = clr.history
+        lr = h['lr']
+        #acc = h['acc']
+        lss = h['loss']
+
+        moving_average_lr = running_mean(np.array(lr),400)
+        #moving_average_acc = running_mean(np.array(acc),400)
+        moving_average_lss = running_mean(np.array(lss),400)
+
+        plt.plot(lr,lss)
+        plt.ylabel('Error')
+        plt.xlabel('Tasa de Aprendizaje')
+        plt.show()
+
+        plt.plot(moving_average_lr.tolist(),moving_average_lss.tolist())
+        plt.ylabel('Error')
+        plt.xlabel('Tasa de Aprendizaje')
+        plt.show()
+
+    else:
+        callbacks_list = [checkpoint]
+
+        history = model.fit(
+                    input,
+                    output,
+                    epochs=args.epochs,
+                    batch_size=args.batch_size,
+                    callbacks=callbacks_list
+                  )
+    
+    if args.save_history:
+        with open("history/"+name,'a') as f:
+            json.dump(history.history['loss'],f)
 
     if args.plot_history:
         plt.plot(history.history['loss'])
         plt.title('Model loss')
-        plt.ylabel('Accuracy')
+        plt.ylabel('Loss')
         plt.xlabel('Epoch')
         plt.legend(['Train'], loc='upper left')
         plt.show()
@@ -353,15 +398,26 @@ def generate(args):
     vocab = len(set(notes))
 
     input, normalized_input = getNormX(notes, note2int, vocab, args.seq_len)
-    model = buildModelLSTM(
-        normalized_input,
-        vocab,
-        args.learning_rate,
-        args.units,
-        args.drop_rate,
-        args.num_layers,
-        args.load
-    )
+    if args.rnn:
+        model = buildModelRNN(
+            normalized_input,
+            vocab,
+            args.learning_rate,
+            args.units,
+            args.drop_rate,
+            args.num_layers,
+            args.load
+        )
+    else:
+        model = buildModelLSTM(
+            normalized_input,
+            vocab,
+            args.learning_rate,
+            args.units,
+            args.drop_rate,
+            args.num_layers,
+            args.load
+        )
     prediction = compose(
         model,
         input,
@@ -392,15 +448,15 @@ subparsers = arg_parser.add_subparsers(title="subcommands")
 train_parser = subparsers.add_parser("train", help="Trains the model with midi files.")
 train_parser.add_argument("--dataset", required=True,
                           help="Name of the folder inside midi that contains the dataset.")
-train_parser.add_argument("--seq-len", type=int, default=100,
+train_parser.add_argument("--seq_len", type=int, default=100,
                           help="Sequence length (100 by default).")
 train_parser.add_argument("--units", type=int, default=512,
                           help="Units in LSTM cells (512 by default).")
-train_parser.add_argument("--drop-rate", type=float, default=0.3,
+train_parser.add_argument("--drop_rate", type=float, default=0.3,
                           help="Dropout rate (0.3 by default).")
-train_parser.add_argument("--learning-rate", type=float, default=0.001,
+train_parser.add_argument("--learning_rate", type=float, default=0.001,
                           help="Learning rate (0.001 by default).")
-train_parser.add_argument("--batch-size", type=int, default=64,
+train_parser.add_argument("--batch_size", type=int, default=64,
                           help="Size of training batches (64 by default).")
 train_parser.add_argument("--epochs", type=int, default=200,
                           help="Max number of epochs (200 by default).")
@@ -408,28 +464,31 @@ train_parser.add_argument("--num_layers", type=int, default=1, help="Number of L
 train_parser.add_argument("-r","--rnn", action="store_true", help="Trains with a simple RNN, instead of a LSTM network.")
 train_parser.add_argument("-g","--plot_model_graph", action="store_true", help="This will plot a graph of the model and save it to a file.")
 train_parser.add_argument("-p","--plot_history", action="store_true", help="This will create a plot for the training history of the model.")
+train_parser.add_argument("-c","--cyclic_learning_rate", action="store_true", help="This will use Cyclic Learning Rate to find an optimal learning rate for the model.")
+train_parser.add_argument("-s","--save_history", action="store_true", help="Saves the training history in .json format.")
 train_parser.set_defaults(main=train)
 
 # Subparser for generating music.
 generate_parser = subparsers.add_parser("generate", help="Composes music with a trained model.")
 generate_parser.add_argument("--dataset", required=True,
                           help="Name of the folder inside midi that contains the dataset.")
-generate_parser.add_argument("--seq-len", type=int, default=100,
+generate_parser.add_argument("--seq_len", type=int, default=100,
                           help="Sequence length (100 by default).")
 generate_parser.add_argument("--units", type=int, default=512,
                           help="Units in LSTM cells (512 by default).")
-generate_parser.add_argument("--drop-rate", type=float, default=0.3,
+generate_parser.add_argument("--drop_rate", type=float, default=0.3,
                           help="Dropout rate (0.3 by default).")
-generate_parser.add_argument("--learning-rate", type=float, default=0.001,
+generate_parser.add_argument("--learning_rate", type=float, default=0.001,
                           help="Learning rate (0.001 by default).")
-generate_parser.add_argument("--composition-len", type=int, default=500,
+generate_parser.add_argument("--composition_len", type=int, default=500,
                           help="Length of the composition, in notes (500 by default).")
-generate_parser.add_argument("--note-len", type=float, default=0.5,
+generate_parser.add_argument("--note_len", type=float, default=0.5,
                           help="Note length (0.5 by default).")
 generate_parser.add_argument("--load", type=str, default=None,
                           help="Name of the model to load.")
 generate_parser.add_argument("--num_layers", type=int, default=1, help="Number of LSTM layers in the model (1 by default).")
-generate_parser.add_argument("-d","--display-sheet", action="store_true", help="Displays a music sheet image of the generated melody.")
+generate_parser.add_argument("-d","--display_sheet", action="store_true", help="Displays a music sheet image of the generated melody.")
+generate_parser.add_argument("-r","--rnn", action="store_true", help="Generate music with a simple RNN, instead of a LSTM network.")
 generate_parser.set_defaults(main=generate)
 
 # Subparser for displaying music sheets.
