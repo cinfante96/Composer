@@ -1,0 +1,2 @@
+Requirement already satisfied: absl-py in c:\users\carlos infante\appdata\local\programs\python\python37\lib\site-packages (0.7.1)
+Requirement already satisfied: six in c:\users\carlos infante\appdata\local\programs\python\python37\lib\site-packages (from absl-py) (1.12.0)

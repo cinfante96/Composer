@@ -5,7 +5,7 @@ import os
 import json
 import numpy as np
 from clr_callback import CyclicLR
-from random import shuffle
+from random import shuffle, randint, choice
 from collections import OrderedDict
 from music21 import converter, instrument, note, chord, stream
 from keras.models import Sequential
@@ -426,6 +426,54 @@ def generate(args):
     )
     createMidi(prediction, args.note_len, args.dataset)
 
+def randomize(args):
+
+    with open('dicts/{}-int2note'.format(args.dataset),'rb') as filepath:
+        int2note = pickle.load(filepath)
+    numbers = [randint(0,len(int2note)-1) for _ in range(args.composition_len)]
+    notes = list(map(lambda n: int2note[n],numbers))
+    createMidi(notes, args.note_len, args.dataset)
+
+def markov(args):
+
+    notes = readMids(args.dataset)
+
+    with open('dicts/{}-note2int'.format(args.dataset),'rb') as filepath:
+        note2int = pickle.load(filepath)
+
+    vocab = len(set(notes))
+    input = []
+    output = []
+    seq_len = args.seq_len
+    for i in range(0, len(notes) - seq_len, 1):
+        sequence_in = notes[i:i + seq_len]
+        sequence_out = notes[i + seq_len]
+        input.append([note2int[char] for char in sequence_in])
+        output.append(note2int[sequence_out])
+
+    classes = set(map(repr,input))
+    preds = [[] for _ in range(len(classes))]
+    ngrams = dict(zip(classes,preds))
+    for i,o in zip(input,output):
+        ngrams[repr(i)].append(o)
+    
+    with open('dicts/{}-int2note'.format(args.dataset),'rb') as filepath:
+        int2note = pickle.load(filepath)    
+    
+    composition = []
+    state = choice(input) # select random first state
+    for _ in range(args.composition_len):
+        pred = ngrams.get(repr(state))
+        if pred:
+            next = choice(pred)
+            composition.append(int2note[next])
+            state = state[1:] + [next]
+        else:
+            print("Unknown sequence.")
+            break
+    createMidi(composition, args.note_len, args.dataset)
+
+
 def display(args):
 
     path = os.path.abspath('./{}'.format(args.midi_path))
@@ -490,6 +538,31 @@ generate_parser.add_argument("--num_layers", type=int, default=1, help="Number o
 generate_parser.add_argument("-d","--display_sheet", action="store_true", help="Displays a music sheet image of the generated melody.")
 generate_parser.add_argument("-r","--rnn", action="store_true", help="Generate music with a simple RNN, instead of a LSTM network.")
 generate_parser.set_defaults(main=generate)
+
+# Subparser for generating random music.
+generate_parser = subparsers.add_parser("randomize", help="Composes music randomly.")
+generate_parser.add_argument("--dataset", required=True,
+                          help="Name of the folder inside midi that contains the dataset.")
+generate_parser.add_argument("--composition_len", type=int, default=500,
+                          help="Length of the composition, in notes (500 by default).")
+generate_parser.add_argument("--note_len", type=float, default=0.5,
+                          help="Note length (0.5 by default).")
+generate_parser.add_argument("-d","--display_sheet", action="store_true", help="Displays a music sheet image of the generated melody.")
+generate_parser.set_defaults(main=randomize)
+
+# Subparser for composing with markov chains and n-grams.
+generate_parser = subparsers.add_parser("markov", help="Composes music using markov chains and n-grams.")
+generate_parser.add_argument("--dataset", required=True,
+                          help="Name of the folder inside midi that contains the dataset.")
+generate_parser.add_argument("--composition_len", type=int, default=500,
+                          help="Length of the composition, in notes (500 by default).")
+generate_parser.add_argument("--note_len", type=float, default=0.5,
+                          help="Note length (0.5 by default).")
+generate_parser.add_argument("--seq_len", type=int, default=8,
+                          help="Sequence length (8 by default).")
+generate_parser.add_argument("-d","--display_sheet", action="store_true", help="Displays a music sheet image of the generated melody.")
+generate_parser.set_defaults(main=markov)
+
 
 # Subparser for displaying music sheets.
 generate_parser = subparsers.add_parser("display", help="Display a music sheet image for a midi.")

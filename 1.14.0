@@ -1,0 +1,16 @@
+Requirement already satisfied: tensorboard in c:\users\carlos infante\appdata\local\programs\python\python37\lib\site-packages (1.14.0)
+Requirement already satisfied: absl-py>=0.4 in c:\users\carlos infante\appdata\local\programs\python\python37\lib\site-packages (from tensorboard) (0.7.1)
+Requirement already satisfied: protobuf>=3.6.0 in c:\users\carlos infante\appdata\local\programs\python\python37\lib\site-packages (from tensorboard) (3.8.0)
+Requirement already satisfied: markdown>=2.6.8 in c:\users\carlos infante\appdata\local\programs\python\python37\lib\site-packages (from tensorboard) (3.1.1)
+Requirement already satisfied: numpy>=1.12.0 in c:\users\carlos infante\appdata\local\programs\python\python37\lib\site-packages (from tensorboard) (1.16.4)
+Requirement already satisfied: werkzeug>=0.11.15 in c:\users\carlos infante\appdata\local\programs\python\python37\lib\site-packages (from tensorboard) (0.15.4)
+Collecting setuptools>=41.0.0 (from tensorboard)
+  Downloading https://files.pythonhosted.org/packages/ec/51/f45cea425fd5cb0b0380f5b0f048ebc1da5b417e48d304838c02d6288a1e/setuptools-41.0.1-py2.py3-none-any.whl (575kB)
+Requirement already satisfied: grpcio>=1.6.3 in c:\users\carlos infante\appdata\local\programs\python\python37\lib\site-packages (from tensorboard) (1.21.1)
+Requirement already satisfied: six>=1.10.0 in c:\users\carlos infante\appdata\local\programs\python\python37\lib\site-packages (from tensorboard) (1.12.0)
+Requirement already satisfied: wheel>=0.26; python_version >= "3" in c:\users\carlos infante\appdata\local\programs\python\python37\lib\site-packages (from tensorboard) (0.33.4)
+Installing collected packages: setuptools
+  Found existing installation: setuptools 40.8.0
+    Uninstalling setuptools-40.8.0:
+      Successfully uninstalled setuptools-40.8.0
+Successfully installed setuptools-41.0.1
