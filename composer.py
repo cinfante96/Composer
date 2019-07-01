@@ -418,9 +418,12 @@ def generate(args):
             args.num_layers,
             args.load
         )
+    with open('notes/{}'.format(args.seed), 'rb') as filepath:
+        seed_notes = pickle.load(filepath)
+    seed, _ = getNormX(seed_notes, note2int, vocab, args.seq_len)
     prediction = compose(
         model,
-        input,
+        seed,
         vocab,
         args.composition_len
     )
@@ -520,6 +523,8 @@ train_parser.set_defaults(main=train)
 generate_parser = subparsers.add_parser("generate", help="Composes music with a trained model.")
 generate_parser.add_argument("--dataset", required=True,
                           help="Name of the folder inside midi that contains the dataset.")
+generate_parser.add_argument("--seed", required=True,
+                          help="Name of the folder inside midi that contains the seed dataset.")
 generate_parser.add_argument("--seq_len", type=int, default=100,
                           help="Sequence length (100 by default).")
 generate_parser.add_argument("--units", type=int, default=512,
