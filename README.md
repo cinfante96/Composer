@@ -17,7 +17,7 @@ A continuación se explica como funciona la ejecución del programa a través de
 
 ### Train
 
-Permite contruir y entrenar modelos de redes RNN y RNN-LSTM. Por ejemplo:
+Permite construir y entrenar modelos de redes RNN y RNN-LSTM. Por ejemplo:
 
 	python composer.py train --dataset=nottingham
 
