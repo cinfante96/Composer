@@ -500,8 +500,8 @@ train_parser.add_argument("--seq_len", type=int, default=100,
                           help="Sequence length (100 by default).")
 train_parser.add_argument("--units", type=int, default=512,
                           help="Units in LSTM cells (512 by default).")
-train_parser.add_argument("--drop_rate", type=float, default=0.3,
-                          help="Dropout rate (0.3 by default).")
+train_parser.add_argument("--drop_rate", type=float, default=0.5,
+                          help="Dropout rate (0.5 by default).")
 train_parser.add_argument("--learning_rate", type=float, default=0.001,
                           help="Learning rate (0.001 by default).")
 train_parser.add_argument("--batch_size", type=int, default=64,
@@ -524,8 +524,8 @@ generate_parser.add_argument("--seq_len", type=int, default=100,
                           help="Sequence length (100 by default).")
 generate_parser.add_argument("--units", type=int, default=512,
                           help="Units in LSTM cells (512 by default).")
-generate_parser.add_argument("--drop_rate", type=float, default=0.3,
-                          help="Dropout rate (0.3 by default).")
+generate_parser.add_argument("--drop_rate", type=float, default=0.5,
+                          help="Dropout rate (0.5 by default).")
 generate_parser.add_argument("--learning_rate", type=float, default=0.001,
                           help="Learning rate (0.001 by default).")
 generate_parser.add_argument("--composition_len", type=int, default=500,
