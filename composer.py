@@ -90,6 +90,41 @@ def readMids(dataset):
 
     return notes
 
+def seed(args):
+    '''
+    Reads every midi in midi_files/dataset directory.
+    Saves a list of the notes in a file under notes/ directory.
+    '''
+    notes = []
+    dataset = args.dataset
+    for file in glob.glob("midi/{}/*.mid".format(dataset)):
+        midi = converter.parse(file)
+
+        print("Reading from %s" % file)
+
+        notes_to_parse = None
+
+        try:
+            score = instrument.partitionByInstrument(midi)
+            notes_to_parse = score.parts[0].recurse() 
+        except:
+            notes_to_parse = midi.flat.notes
+
+        for element in notes_to_parse:
+            if isinstance(element, note.Note):
+                notes.append(str(element.pitch))
+            elif isinstance(element, chord.Chord):
+                notes.append(
+                    '.'.join(str(n) for n in element.normalOrder)
+                )
+    createDir("notes")
+    fname = 'notes/{}'.format(dataset)
+    if os.path.exists(fname):
+        print("Encoded dataset already exists.")
+    else:
+        with open(fname, 'wb') as filepath:
+            pickle.dump(notes, filepath)
+            print("Encoded dataset saved in ",fname)
 
 def getXY(notes, note2int, vocab, seq_len):
     '''
@@ -420,6 +455,7 @@ def generate(args):
         )
     with open('notes/{}'.format(args.seed), 'rb') as filepath:
         seed_notes = pickle.load(filepath)
+    seed_notes = list(filter(lambda x: x in note2int.keys(),seed_notes)) # Delete notes outside dict
     seed, _ = getNormX(seed_notes, note2int, vocab, args.seq_len)
     prediction = compose(
         model,
@@ -518,6 +554,12 @@ train_parser.add_argument("-p","--plot_history", action="store_true", help="This
 train_parser.add_argument("-c","--cyclic_learning_rate", action="store_true", help="This will use Cyclic Learning Rate to find an optimal learning rate for the model.")
 train_parser.add_argument("-s","--save_history", action="store_true", help="Saves the training history in .json format.")
 train_parser.set_defaults(main=train)
+
+# Subparser for generating seeds.
+seed_parser = subparsers.add_parser("seed", help="Generates notes array under Notes.")
+seed_parser.add_argument("--dataset", required=True,
+                          help="Name of the folder inside midi that contains the dataset.")
+seed_parser.set_defaults(main=seed)
 
 # Subparser for generating music.
 generate_parser = subparsers.add_parser("generate", help="Composes music with a trained model.")
